@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { AuthError } from "next-auth";
+import { cookies } from "next/headers";
 
 export async function authenticate(
     prevState: string | undefined,
@@ -41,19 +42,19 @@ export type State = {
       customerId?: string[];
       amount?: string[];
       status?: string[];
-    };
-    message?: string | null;
+    },
+    message?: string | null,
+    toastMessage?: string | null,
+    toastType?: string | null,
   };
 
 export async function createInvoice(prevState: State, formData: FormData) {
-    console.log(prevState);
-    console.log(Object.fromEntries(formData.entries()));
     const rawFormData = CreateInvoice.safeParse(Object.fromEntries(formData.entries()));
-    console.log('Customer ID = ', rawFormData.data?.customerId);
     if(!rawFormData.success){
         return {
             errors: rawFormData.error.flatten().fieldErrors,
             message: 'Missing fields. Failed to create invoice',
+            
         }
     }
     const {customerId, status, amount} = rawFormData.data;
@@ -64,11 +65,16 @@ export async function createInvoice(prevState: State, formData: FormData) {
     INSERT INTO invoices (customer_id, amount, status, date)
     VALUES (${customerId}, ${amountInDecimal}, ${status}, ${date})
     `;
+    
     }catch(_){
         return {
             message: 'Database Error: Failed to create Invoice',
+            toastMessage: 'Failed to create invoice',
+            toastType: 'error',
         };  
     }
+    cookies().set('toastMessage', 'Invoice created successfully', {expires: Date.now()+7000});
+    cookies().set('toastType', 'success', {expires: Date.now() + 7000});
     //Clear the client cache and make new request, followed by redirecting to invoices page
     revalidatePath('/dashboard/invoices');
     redirect('/dashboard/invoices');
@@ -80,6 +86,7 @@ export async function updateInvoice(id: string, prevState: State, formData: Form
         return {
             errors: rawFormData.error.flatten().fieldErrors,
             message: 'Missing fields. Failed to update invoice',
+            
         }
     }
     const {customerId, amount, status} = rawFormData.data;
@@ -94,11 +101,17 @@ export async function updateInvoice(id: string, prevState: State, formData: Form
     }catch(_){
         return {
             message: 'Database Error: Failed to update Invoice',
+            toastMessage: 'Failed to update invoice',
+            toastType: 'error',
         };
     }
     //Clear the client cache and make new request, followed by redirecting to invoices page
+    cookies().set('toastMessage', 'Invoice updated successfully');
+    cookies().set('toastType', 'success');
     revalidatePath('/dashboard/invoices');
     redirect('/dashboard/invoices');
+   // return { toastType: 'success', toastMessage: 'Invoice updated successfully'};
+    
 }
 
 export async function deleteInvoice(id: string){
@@ -108,7 +121,7 @@ export async function deleteInvoice(id: string){
     DELETE FROM invoices where id = ${id}
     `;
     revalidatePath('/dashboard/invoices');
-    return {message: 'Deleted Invoice'};
+   //  return {message: 'Deleted Invoice', toastMessage: 'Deleted Invoice', toastType: 'success'};
     }catch(_){
         return {
             message: 'Database Error: Failed to delete Invoice',
